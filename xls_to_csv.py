@@ -13,16 +13,21 @@ import argparse
 import csv
 import glob
 import os
+from pathlib import Path
 
-
-def convert_xls_to_csv(xls_path: str, csv_path: str) -> None:
-    """Read a tab-separated .xls file (ISO-8859-1) and write a UTF-8 CSV."""
-    with open(xls_path, encoding="iso-8859-1", newline="") as infile:
-        reader = csv.reader(infile, delimiter="\t")
-        with open(csv_path, "w", encoding="utf-8", newline="") as outfile:
-            writer = csv.writer(outfile)
-            for row in reader:
-                writer.writerow(row)
+# Keep this utility runnable in lightweight environments where the full
+# analytics stack required by functions.py may not be installed yet.
+try:
+    from functions import convert_xls_to_csv
+except ModuleNotFoundError:
+    def convert_xls_to_csv(xls_path: Path, csv_path: Path) -> None:
+        """Read a tab-separated .xls file (ISO-8859-1) and write a UTF-8 CSV."""
+        with xls_path.open(encoding="iso-8859-1", newline="") as infile:
+            reader = csv.reader(infile, delimiter="\t")
+            with csv_path.open("w", encoding="utf-8", newline="") as outfile:
+                writer = csv.writer(outfile)
+                for row in reader:
+                    writer.writerow(row)
 
 
 def main() -> None:
@@ -70,7 +75,7 @@ def main() -> None:
             continue
 
         try:
-            convert_xls_to_csv(xls_path, csv_path)
+            convert_xls_to_csv(Path(xls_path), Path(csv_path))
             print(f"  OK     {rel_xls} -> {rel_csv}")
             converted += 1
         except Exception as exc:  # noqa: BLE001

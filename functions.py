@@ -18,6 +18,7 @@ import logging
 import os
 import pickle
 import re
+import csv
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -803,6 +804,129 @@ def _estimate_breathing_rate_from_ecg(
         return float(dominant_freq * 60.0)
     except Exception:
         return float("nan")
+
+
+def _bandpass_filter(
+    signal: np.ndarray,
+    fs: float,
+    lowcut: float,
+    highcut: float,
+    order: int = 4,
+) -> np.ndarray:
+    """Band-pass filter a 1D signal with zero-phase SOS filtering.
+
+    Parameters
+    ----------
+    signal : np.ndarray
+        Input 1D signal.
+    fs : float
+        Sampling frequency in Hz.
+    lowcut : float
+        Low cut-off frequency in Hz.
+    highcut : float
+        High cut-off frequency in Hz.
+    order : int
+        Butterworth filter order.
+
+    Returns
+    -------
+    np.ndarray
+        Filtered signal.
+    """
+    sig = np.asarray(signal, dtype=float).squeeze()
+    if sig.ndim != 1:
+        raise ValueError("Expected a 1D signal")
+    if sig.size < 3:
+        return sig.copy()
+    if fs <= 0:
+        raise ValueError("Sampling frequency must be positive")
+
+    nyquist = fs / 2.0
+    low = max(float(lowcut), 1e-6)
+    high = min(float(highcut), nyquist * 0.99)
+    if low >= high:
+        return sig.copy()
+
+    sos = sp_signal.butter(order, [low, high], btype="bandpass", fs=fs, output="sos")
+    return sp_signal.sosfiltfilt(sos, sig)
+
+
+def _notch_filter(signal: np.ndarray, fs: float, freq: float = 50.0, quality: float = 30.0) -> np.ndarray:
+    """Apply a notch filter for electrical mains interference.
+
+    Parameters
+    ----------
+    signal : np.ndarray
+        Input 1D signal.
+    fs : float
+        Sampling frequency in Hz.
+    freq : float
+        Interference frequency in Hz (e.g., 50 or 60 Hz).
+    quality : float
+        Quality factor of the notch filter.
+
+    Returns
+    -------
+    np.ndarray
+        Filtered signal.
+    """
+    sig = np.asarray(signal, dtype=float).squeeze()
+    if sig.ndim != 1:
+        raise ValueError("Expected a 1D signal")
+    if sig.size < 3 or fs <= 0 or freq <= 0:
+        return sig.copy()
+
+    nyquist = fs / 2.0
+    if freq >= nyquist:
+        return sig.copy()
+
+    b, a = sp_signal.iirnotch(w0=freq, Q=quality, fs=fs)
+    sos = sp_signal.tf2sos(b, a)
+    return sp_signal.sosfiltfilt(sos, sig)
+
+
+def filter_ecg(signal: np.ndarray, fs: float, mains_hz: float = 50.0) -> np.ndarray:
+    """Filter ECG with mains notch and 0.5–40 Hz band-pass.
+
+    Parameters
+    ----------
+    signal : np.ndarray
+        Input ECG signal.
+    fs : float
+        Sampling frequency in Hz.
+    mains_hz : float
+        Electrical mains frequency for notch filtering (typically 50 or 60 Hz).
+
+    Returns
+    -------
+    np.ndarray
+        Filtered ECG signal.
+    """
+    filtered = _notch_filter(signal, fs, freq=mains_hz)
+    return _bandpass_filter(filtered, fs, lowcut=0.5, highcut=40.0)
+
+
+def filter_ppg(data: np.ndarray, fs: float) -> np.ndarray:
+    """Band-pass PPG signal(s) for pulsatile component isolation.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        Input 1D or 2D signal data (rows represent channels for 2D input).
+    fs : float
+        Sampling frequency in Hz.
+
+    Returns
+    -------
+    np.ndarray
+        Filtered signal with the same dimensionality as input.
+    """
+    arr = np.asarray(data, dtype=float)
+    if arr.ndim == 1:
+        return _bandpass_filter(arr, fs, lowcut=0.4, highcut=8.0)
+    if arr.ndim == 2:
+        return np.vstack([_bandpass_filter(ch, fs, lowcut=0.4, highcut=8.0) for ch in arr])
+    raise ValueError("PPG data must be 1D or 2D")
 
 
 def sync_ecg_with_telemetry(
@@ -2358,3 +2482,21 @@ def setup_logging(log_file: Optional[str] = None, level: int = logging.INFO) -> 
         handlers=handlers,
         force=True,
     )
+
+
+def convert_xls_to_csv(xls_path: Path, csv_path: Path) -> None:
+    """Convert a tab-separated ISO-8859-1 ``.xls`` file to UTF-8 CSV.
+
+    Parameters
+    ----------
+    xls_path : Path
+        Input telemetry export path.
+    csv_path : Path
+        Output CSV path.
+    """
+    with xls_path.open(encoding="iso-8859-1", newline="") as infile:
+        reader = csv.reader(infile, delimiter="\t")
+        with csv_path.open("w", encoding="utf-8", newline="") as outfile:
+            writer = csv.writer(outfile)
+            for row in reader:
+                writer.writerow(row)
