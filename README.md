@@ -17,9 +17,11 @@ a COPD exacerbation risk score for each patient.
    - [Convert BDF files to CSV/TSV](#2-convert-bdf-files-to-csvtsv)
    - [Run the main analysis pipeline](#3-run-the-main-analysis-pipeline)
    - [Run the COPD risk scoring notebook](#4-run-the-copd-risk-scoring-notebook)
+   - [Run the Streamlit GUI](#5-run-the-streamlit-gui)
 5. [Configuration reference](#configuration-reference)
 6. [Output reference](#output-reference)
 7. [COPD risk scoring](#copd-risk-scoring)
+8. [Streamlit GUI](#streamlit-gui)
 
 ---
 
@@ -140,6 +142,9 @@ jupyter notebook cpet.ipynb
 
 # 5. (Optional) Run the COPD risk scoring notebook
 jupyter notebook copd_risk.ipynb
+
+# 6. (Optional) Run the Streamlit GUI
+streamlit run app.py
 ```
 
 Results are written to `./output/`.
@@ -256,6 +261,20 @@ Then **Run All**.  For each patient it:
 3. Assigns a composite risk level: **Low** (0 flags), **Moderate** (1–2 flags), **High** (≥ 3 flags)
 4. Generates a radar chart, a cross-patient bar chart, and (if ≥ 3 patients) a PCA scatter
 
+### 5. Run the Streamlit GUI
+
+Run the app from the repository root:
+
+```bash
+streamlit run app.py
+```
+
+The GUI supports:
+- selecting a patient folder
+- viewing CPET telemetry and stage-based plots
+- computing COPD features/risk
+- loading available ECG BDF files (L1/L2) and showing extracted ECG features
+
 ---
 
 ## Configuration reference
@@ -366,3 +385,9 @@ baseline SpO₂ is computed as the median of the first 10 data rows
 > **Note:** This scoring is intended as a research screening tool, not a
 > clinical diagnostic.  Thresholds are derived from group-level CPET
 > reference values and should be validated against your specific population.
+
+## Streamlit GUI
+
+`app.py` is an interactive interface built on top of `functions.py`. It reads
+the same patient data layout (`data/<patient>/`) and uses the same CPET/ECG
+processing helpers as the notebooks.
