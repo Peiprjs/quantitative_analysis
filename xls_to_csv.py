@@ -15,6 +15,8 @@ import glob
 import os
 from pathlib import Path
 
+# Keep this utility runnable in lightweight environments where the full
+# analytics stack required by functions.py may not be installed yet.
 try:
     from functions import convert_xls_to_csv
 except ModuleNotFoundError:

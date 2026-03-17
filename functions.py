@@ -813,7 +813,26 @@ def _bandpass_filter(
     highcut: float,
     order: int = 4,
 ) -> np.ndarray:
-    """Band-pass filter a 1D signal with zero-phase SOS filtering."""
+    """Band-pass filter a 1D signal with zero-phase SOS filtering.
+
+    Parameters
+    ----------
+    signal : np.ndarray
+        Input 1D signal.
+    fs : float
+        Sampling frequency in Hz.
+    lowcut : float
+        Low cut-off frequency in Hz.
+    highcut : float
+        High cut-off frequency in Hz.
+    order : int
+        Butterworth filter order.
+
+    Returns
+    -------
+    np.ndarray
+        Filtered signal.
+    """
     sig = np.asarray(signal, dtype=float).squeeze()
     if sig.ndim != 1:
         raise ValueError("Expected a 1D signal")
@@ -833,7 +852,24 @@ def _bandpass_filter(
 
 
 def _notch_filter(signal: np.ndarray, fs: float, freq: float = 50.0, quality: float = 30.0) -> np.ndarray:
-    """Apply a notch filter for electrical mains interference."""
+    """Apply a notch filter for electrical mains interference.
+
+    Parameters
+    ----------
+    signal : np.ndarray
+        Input 1D signal.
+    fs : float
+        Sampling frequency in Hz.
+    freq : float
+        Interference frequency in Hz (e.g., 50 or 60 Hz).
+    quality : float
+        Quality factor of the notch filter.
+
+    Returns
+    -------
+    np.ndarray
+        Filtered signal.
+    """
     sig = np.asarray(signal, dtype=float).squeeze()
     if sig.ndim != 1:
         raise ValueError("Expected a 1D signal")
@@ -845,17 +881,46 @@ def _notch_filter(signal: np.ndarray, fs: float, freq: float = 50.0, quality: fl
         return sig.copy()
 
     b, a = sp_signal.iirnotch(w0=freq, Q=quality, fs=fs)
-    return sp_signal.filtfilt(b, a, sig)
+    sos = sp_signal.tf2sos(b, a)
+    return sp_signal.sosfiltfilt(sos, sig)
 
 
 def filter_ecg(signal: np.ndarray, fs: float, mains_hz: float = 50.0) -> np.ndarray:
-    """Filter ECG with mains notch and 0.5–40 Hz band-pass."""
+    """Filter ECG with mains notch and 0.5–40 Hz band-pass.
+
+    Parameters
+    ----------
+    signal : np.ndarray
+        Input ECG signal.
+    fs : float
+        Sampling frequency in Hz.
+    mains_hz : float
+        Electrical mains frequency for notch filtering (typically 50 or 60 Hz).
+
+    Returns
+    -------
+    np.ndarray
+        Filtered ECG signal.
+    """
     filtered = _notch_filter(signal, fs, freq=mains_hz)
     return _bandpass_filter(filtered, fs, lowcut=0.5, highcut=40.0)
 
 
 def filter_ppg(data: np.ndarray, fs: float) -> np.ndarray:
-    """Band-pass PPG signal(s) for pulsatile component isolation."""
+    """Band-pass PPG signal(s) for pulsatile component isolation.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        Input 1D or 2D signal data (rows represent channels for 2D input).
+    fs : float
+        Sampling frequency in Hz.
+
+    Returns
+    -------
+    np.ndarray
+        Filtered signal with the same dimensionality as input.
+    """
     arr = np.asarray(data, dtype=float)
     if arr.ndim == 1:
         return _bandpass_filter(arr, fs, lowcut=0.4, highcut=8.0)
