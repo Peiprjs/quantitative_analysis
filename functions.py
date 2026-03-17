@@ -18,6 +18,7 @@ import logging
 import os
 import pickle
 import re
+import csv
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -2358,3 +2359,21 @@ def setup_logging(log_file: Optional[str] = None, level: int = logging.INFO) -> 
         handlers=handlers,
         force=True,
     )
+
+
+def convert_xls_to_csv(xls_path: Path, csv_path: Path) -> None:
+    """Convert a tab-separated ISO-8859-1 ``.xls`` file to UTF-8 CSV.
+
+    Parameters
+    ----------
+    xls_path : Path
+        Input telemetry export path.
+    csv_path : Path
+        Output CSV path.
+    """
+    with xls_path.open(encoding="iso-8859-1", newline="") as infile:
+        reader = csv.reader(infile, delimiter="\t")
+        with csv_path.open("w", encoding="utf-8", newline="") as outfile:
+            writer = csv.writer(outfile)
+            for row in reader:
+                writer.writerow(row)
