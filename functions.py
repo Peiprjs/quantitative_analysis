@@ -806,6 +806,64 @@ def _estimate_breathing_rate_from_ecg(
         return float("nan")
 
 
+def _bandpass_filter(
+    signal: np.ndarray,
+    fs: float,
+    lowcut: float,
+    highcut: float,
+    order: int = 4,
+) -> np.ndarray:
+    """Band-pass filter a 1D signal with zero-phase SOS filtering."""
+    sig = np.asarray(signal, dtype=float).squeeze()
+    if sig.ndim != 1:
+        raise ValueError("Expected a 1D signal")
+    if sig.size < 3:
+        return sig.copy()
+    if fs <= 0:
+        raise ValueError("Sampling frequency must be positive")
+
+    nyquist = fs / 2.0
+    low = max(float(lowcut), 1e-6)
+    high = min(float(highcut), nyquist * 0.99)
+    if low >= high:
+        return sig.copy()
+
+    sos = sp_signal.butter(order, [low, high], btype="bandpass", fs=fs, output="sos")
+    return sp_signal.sosfiltfilt(sos, sig)
+
+
+def _notch_filter(signal: np.ndarray, fs: float, freq: float = 50.0, quality: float = 30.0) -> np.ndarray:
+    """Apply a notch filter for electrical mains interference."""
+    sig = np.asarray(signal, dtype=float).squeeze()
+    if sig.ndim != 1:
+        raise ValueError("Expected a 1D signal")
+    if sig.size < 3 or fs <= 0 or freq <= 0:
+        return sig.copy()
+
+    nyquist = fs / 2.0
+    if freq >= nyquist:
+        return sig.copy()
+
+    b, a = sp_signal.iirnotch(w0=freq, Q=quality, fs=fs)
+    return sp_signal.filtfilt(b, a, sig)
+
+
+def filter_ecg(signal: np.ndarray, fs: float, mains_hz: float = 50.0) -> np.ndarray:
+    """Filter ECG with mains notch and 0.5–40 Hz band-pass."""
+    filtered = _notch_filter(signal, fs, freq=mains_hz)
+    return _bandpass_filter(filtered, fs, lowcut=0.5, highcut=40.0)
+
+
+def filter_ppg(data: np.ndarray, fs: float) -> np.ndarray:
+    """Band-pass PPG signal(s) for pulsatile component isolation."""
+    arr = np.asarray(data, dtype=float)
+    if arr.ndim == 1:
+        return _bandpass_filter(arr, fs, lowcut=0.4, highcut=8.0)
+    if arr.ndim == 2:
+        return np.vstack([_bandpass_filter(ch, fs, lowcut=0.4, highcut=8.0) for ch in arr])
+    raise ValueError("PPG data must be 1D or 2D")
+
+
 def sync_ecg_with_telemetry(
     ecg_features: pd.DataFrame,
     telemetry_df: pd.DataFrame,
