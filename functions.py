@@ -22,11 +22,11 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import matplotlib
-import matplotlib.pyplot as plt
 import mne
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from IPython import get_ipython
 from matplotlib.figure import Figure
 from scipy import signal as sp_signal
 from scipy.interpolate import interp1d
@@ -36,8 +36,12 @@ from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
 from tqdm.auto import tqdm
 
-# Use non-interactive backend so plots can be saved in batch mode.
-matplotlib.use("Agg")
+# Use non-interactive backend by default for batch mode.
+# In notebooks/IPython sessions keep the active backend so figures can be shown.
+if get_ipython() is None:
+    matplotlib.use("Agg")
+
+import matplotlib.pyplot as plt
 
 mne.set_log_level("WARNING")
 
@@ -2282,6 +2286,22 @@ def _find_column_in_series(series: pd.Series, candidates: List[str]) -> Optional
     return None
 
 
+def series_to_table(series: pd.Series) -> pd.DataFrame:
+    """Convert a Series into a 2-column DataFrame for display/export.
+
+    Parameters
+    ----------
+    series : pd.Series
+        Source Series whose index contains metric names.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with columns ``metric`` and ``value``.
+    """
+    return series.rename("value").reset_index(names="metric")
+
+
 def _save_figure(fig: Figure, output_dir: Optional[Path], filename: str) -> None:
     """Save *fig* to *output_dir/filename* if *output_dir* is not ``None``.
 
@@ -2299,6 +2319,22 @@ def _save_figure(fig: Figure, output_dir: Optional[Path], filename: str) -> None
         out_path = output_dir / filename
         fig.savefig(out_path, dpi=150, bbox_inches="tight")
         logger.info("Saved figure: %s", out_path)
+
+
+def show_and_save_figure(fig: Figure, output_dir: Optional[Path], filename: str) -> None:
+    """Save a figure to PNG and show it in interactive contexts.
+
+    Parameters
+    ----------
+    fig : Figure
+        Matplotlib figure to render.
+    output_dir : Optional[Path]
+        Directory where the PNG file should be written.
+    filename : str
+        Output PNG filename.
+    """
+    _save_figure(fig, output_dir, filename)
+    plt.show()
 
 
 def setup_logging(log_file: Optional[str] = None, level: int = logging.INFO) -> None:
